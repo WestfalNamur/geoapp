@@ -1,0 +1,13 @@
+{
+  "name": "geoapp-devcontainer",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "dev",
+  // Editors that use this file (VS Code Remote-Containers, etc.) trigger
+  // bootstrap on first attach. `up.sh` triggers it independently when SSHing
+  // in directly, so plain SSH workflows do not require a Dev Containers-aware
+  // editor.
+  "postCreateCommand": "/usr/local/bin/bootstrap.sh",
+  "shutdownAction": "none"
+}

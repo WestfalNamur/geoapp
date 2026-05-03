@@ -1,0 +1,26 @@
+# Devcontainer sshd. Listens on 2222 (forwarded to host:2222 via compose).
+# Key-only auth, no root, dev user only.
+
+Port 2222
+AddressFamily any
+ListenAddress 0.0.0.0
+ListenAddress ::
+
+# Persistent host key lives on the `ssh_host_keys` named volume so the
+# fingerprint survives image rebuilds (no MITM warning on `up.sh` re-runs).
+HostKey /etc/ssh/keys/ssh_host_ed25519_key
+
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+ChallengeResponseAuthentication no
+UsePAM yes
+
+AllowUsers dev
+PubkeyAuthentication yes
+AuthorizedKeysFile .ssh/authorized_keys
+
+X11Forwarding no
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server

@@ -1,0 +1,94 @@
+# Local-VPC devcontainer.
+#
+# Networks model a small VPC:
+#   public  = "public subnet". Only `app` sits here. Host port forwards land here.
+#   private = "private subnet". `app` <-> `db` only. No host port forwards.
+#   egress  = NAT path. `app` only. Stub for now; a forward proxy slots in here later
+#             (see TODO at the bottom of this file).
+#
+# `app` is the bastion + workload — the only multi-homed service.
+# `db` is reachable only from `app` at db:5432; never from the host.
+
+name: geoapp-devcontainer
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # bootstrap.sh lives one level up; expose it to the build context.
+      additional_contexts:
+        scripts: ../scripts
+    # API keys etc. — gitignored. Copy .devcontainer.env.example to
+    # .devcontainer.env at repo root and fill in values.
+    env_file:
+      - ../.devcontainer.env
+    environment:
+      # Passed in by scripts/up.sh via `git remote get-url origin` on the host.
+      # bootstrap.sh uses this to clone the repo into the `workspace` volume on
+      # first run. If unset, bootstrap aborts with a clear message.
+      REPO_ORIGIN_URL: ${REPO_ORIGIN_URL:-}
+    ports:
+      # public subnet: only these reach the host.
+      - "2222:2222"   # ssh — `up.sh` connects here
+      - "5173:5173"   # Vite / React SPA dev server (bind to 0.0.0.0 inside, see README)
+      # Reserved for later; uncomment as services come online:
+      # - "3000:3000" # backend
+      # - "8000:8000" # other
+    volumes:
+      - workspace:/workspace
+      - home:/home/dev
+      - ssh_host_keys:/etc/ssh/keys
+      # ONE host bind-mount, read-only: the host pubkey to inject into
+      # /home/dev/.ssh/authorized_keys on first boot. Re-reads on every start
+      # so swapping host keys is a `up.sh` away.
+      - ${HOME}/.ssh/id_ed25519.pub:/run/host_pubkey:ro
+    networks:
+      - public
+      - private
+      - egress
+    restart: unless-stopped
+
+  db:
+    # Latest stable PostgreSQL 18 + PostGIS 3.6 (verified on Docker Hub).
+    # To pin tighter for reproducibility:
+    #   docker pull postgis/postgis:18-3.6
+    #   docker inspect --format='{{index .RepoDigests 0}}' postgis/postgis:18-3.6
+    # then use: postgis/postgis@sha256:<digest>
+    # Or pin to a future patch tag like 18-3.6.1 once published.
+    image: postgis/postgis:18-3.6
+    # postgis/postgis ships only linux/amd64 manifests today; on Apple Silicon
+    # this runs under Rosetta. Acceptable for dev. Alternatives if perf matters:
+    #   - imresamu/postgis-arm64:18-3.6  (community arm64 build)
+    #   - build PostGIS on top of `postgres:18` (multi-arch base) ourselves
+    platform: linux/amd64
+    env_file:
+      - ../.devcontainer.env
+    volumes:
+      # PG18 changed the convention: mount at /var/lib/postgresql, image puts
+      # data in a versioned subdir (/var/lib/postgresql/18/docker). This makes
+      # `pg_upgrade --link` cross-version upgrades work without mount-boundary
+      # issues. See docker-library/postgres#1259.
+      - pgdata:/var/lib/postgresql
+    networks:
+      # private subnet only. No host port forward.
+      - private
+    restart: unless-stopped
+
+networks:
+  public:
+    driver: bridge
+  private:
+    driver: bridge
+    internal: true   # no external connectivity from this network
+  egress:
+    driver: bridge
+    # TODO: add a forward-proxy service on this network (e.g. tinyproxy /
+    # squid / mitmproxy with an allowlist) and route agent traffic through
+    # HTTP_PROXY/HTTPS_PROXY so egress can be policy-controlled.
+
+volumes:
+  workspace:        # /workspace — code (cloned by bootstrap.sh on first run)
+  home:             # /home/dev — dotfiles, GitHub key, shell history
+  ssh_host_keys:    # /etc/ssh/keys — sshd identity (stable fingerprint)
+  pgdata:           # postgres data
