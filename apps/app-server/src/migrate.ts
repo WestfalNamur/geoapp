@@ -14,9 +14,7 @@ async function appliedMigrations(): Promise<Set<string>> {
   return new Set(rows.map((r: { name: string }) => r.name));
 }
 
-async function run() {
-  await ensureMigrationsTable();
-
+async function runUp() {
   const applied = await appliedMigrations();
   const migrationsDir = new URL("../migrations", import.meta.url).pathname;
 
@@ -43,6 +41,47 @@ async function run() {
   }
 
   console.log("Migrations complete.");
+}
+
+async function runDown() {
+  const applied = await appliedMigrations();
+  const migrationsDir = new URL("../migrations", import.meta.url).pathname;
+
+  const files = Array.from(new Bun.Glob("*.ts").scanSync({ cwd: migrationsDir, absolute: false }))
+    .filter((f) => f.endsWith(".ts"))
+    .sort()
+    .reverse();
+
+  for (const file of files) {
+    if (!applied.has(file)) {
+      console.log(`  skip ${file} (not applied)`);
+      continue;
+    }
+
+    const mod = await import(`${migrationsDir}/${file}`);
+    const down = mod.down;
+    if (typeof down !== "function") {
+      throw new Error(`Migration ${file} does not export a down function`);
+    }
+
+    console.log(`  revert ${file} …`);
+    await down(sql);
+    await sql`DELETE FROM _migrations WHERE name = ${file}`;
+    console.log(`  done  ${file}`);
+  }
+
+  console.log("Rollback complete.");
+}
+
+async function run() {
+  await ensureMigrationsTable();
+
+  const direction = Bun.argv.includes("--down") ? "down" : "up";
+  if (direction === "down") {
+    await runDown();
+  } else {
+    await runUp();
+  }
 }
 
 run()

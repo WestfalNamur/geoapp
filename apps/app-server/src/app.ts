@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { users } from "./routes/users.js";
+import { api } from "./routes/api.js";
 
 const app = new Hono();
 
@@ -7,6 +7,6 @@ app.get("/health", (c) => {
   return c.json({ status: "ok" });
 });
 
-app.route("/users", users);
+app.route("/api", api);
 
 export { app };
