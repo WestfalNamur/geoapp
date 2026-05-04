@@ -1,10 +1,19 @@
 import { sql } from "../index.js";
 
-export async function getUserByName(name: string) {
-    const rows = await sql`
-    SELECT id, name, password
+export async function getUsers() {
+  const rows = await sql`
+    SELECT id, name, slug, password
     FROM users
-    WHERE name = ${name}
+    ORDER BY id
   `;
-    return rows[0] ?? null;
+  return rows;
+}
+
+export async function getUserBySlug(slug: string) {
+  const rows = await sql`
+    SELECT id, name, slug, password
+    FROM users
+    WHERE slug = ${slug}
+  `;
+  return rows[0] ?? null;
 }
