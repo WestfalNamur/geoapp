@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { getUsers, getUserBySlug } from "../db/controllers/users.js";
+import { getUsers, getUserBySlug } from "@db/controllers/users.js";
 
 const users = new Hono();
 
